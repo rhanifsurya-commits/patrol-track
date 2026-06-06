@@ -232,9 +232,241 @@
 
 <div class="toast" id="toast"></div>
 
-<!-- QR libraries -->
+<!-- QR scanner library -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+<!-- Self-contained QR code generator (no CDN needed) -->
+<script>
+// Minimal QR Code generator — reed-solomon + matrix, self-contained
+// Based on qrcodejs, rewritten to be dependency-free
+var QRCode = (function() {
+  // --- GF(256) tables ---
+  var EXP = [], LOG = [];
+  (function() {
+    var x = 1;
+    for (var i = 0; i < 256; i++) { EXP[i] = x; LOG[x] = i; x = x << 1; if (x & 0x100) x ^= 0x11d; }
+    for (var i = 255; i < 512; i++) EXP[i] = EXP[i - 255];
+  })();
+  function gfMul(a, b) { if (a === 0 || b === 0) return 0; return EXP[(LOG[a] + LOG[b]) % 255]; }
+  function gfPoly(e) {
+    var p = [1];
+    for (var i = 0; i < e; i++) {
+      var q = [1, EXP[i]];
+      var r = new Array(p.length + q.length - 1).fill(0);
+      for (var j = 0; j < p.length; j++) for (var k = 0; k < q.length; k++) r[j+k] ^= gfMul(p[j], q[k]);
+      p = r;
+    }
+    return p;
+  }
+  function gfPolyDiv(msg, gen) {
+    var r = msg.slice();
+    for (var i = 0; i < msg.length - (gen.length - 1); i++) {
+      if (r[i] === 0) continue;
+      var coef = r[i];
+      for (var j = 1; j < gen.length; j++) r[i+j] ^= gfMul(gen[j], coef);
+    }
+    return r.slice(msg.length - (gen.length - 1));
+  }
+
+  // --- QR data encoding (byte mode, ECC level M, version auto) ---
+  // We use a lookup for small data (version 1-10)
+  var EC_TABLE = {
+    // [version][level M]: [total codewords, ec codewords per block, blocks]
+    1: [16, 10, 1], 2: [28, 16, 1], 3: [44, 26, 1],
+    4: [64, 18, 2], 5: [86, 24, 2], 6: [108, 16, 4],
+    7: [124, 18, 4], 8: [154, 22, 4], 9: [182, 22, 5],
+    10: [216, 26, 5]
+  };
+  var ALIGN = { 1:[], 2:[6,18], 3:[6,22], 4:[6,26], 5:[6,30], 6:[6,34], 7:[6,22,38], 8:[6,24,42], 9:[6,26,46], 10:[6,28,50] };
+
+  function getVersion(len) {
+    // capacity for byte mode, ECC M
+    var caps = [0,9,16,26,36,46,60,66,86,100,122];
+    for (var v = 1; v <= 10; v++) if (caps[v] >= len) return v;
+    return 10;
+  }
+
+  function encodeData(text) {
+    var bytes = [];
+    for (var i = 0; i < text.length; i++) bytes.push(text.charCodeAt(i));
+    var version = getVersion(bytes.length);
+    var ec = EC_TABLE[version];
+    var totalData = ec[0] - ec[1] * ec[2];
+
+    // Build data codewords
+    var bits = [];
+    function addBits(val, len) { for (var i = len-1; i >= 0; i--) bits.push((val >> i) & 1); }
+    addBits(0b0100, 4); // byte mode
+    addBits(bytes.length, 8);
+    for (var i = 0; i < bytes.length; i++) addBits(bytes[i], 8);
+    // Terminator
+    for (var i = 0; i < 4 && bits.length < totalData * 8; i++) bits.push(0);
+    while (bits.length % 8) bits.push(0);
+    // Pad
+    var pads = [0xEC, 0x11]; var pi = 0;
+    while (bits.length < totalData * 8) { addBits(pads[pi++ % 2], 8); }
+
+    // Convert to codewords
+    var codewords = [];
+    for (var i = 0; i < bits.length; i += 8) {
+      var b = 0; for (var j = 0; j < 8; j++) b = (b << 1) | bits[i+j];
+      codewords.push(b);
+    }
+
+    // EC codewords
+    var gen = gfPolyDiv(codewords.concat(new Array(ec[1]).fill(0)), gfPoly(ec[1]));
+    // For simplicity (single block for versions 1-3), just append
+    if (ec[2] === 1) return { data: codewords.concat(gen), version: version };
+
+    // Multi-block interleaving (simplified for versions 4+)
+    var blockSize = Math.floor(codewords.length / ec[2]);
+    var blocks = [], ecBlocks = [];
+    var idx = 0;
+    for (var b = 0; b < ec[2]; b++) {
+      var sz = b < ec[2] - (codewords.length % ec[2]) ? blockSize : blockSize + 1;
+      var block = codewords.slice(idx, idx + sz); idx += sz;
+      blocks.push(block);
+      var ecPoly = gfPolyDiv(block.concat(new Array(ec[1]).fill(0)), gfPoly(ec[1]));
+      ecBlocks.push(ecPoly);
+    }
+    var interleaved = [];
+    for (var i = 0; i < blocks[blocks.length-1].length; i++)
+      for (var b = 0; b < ec[2]; b++) if (i < blocks[b].length) interleaved.push(blocks[b][i]);
+    for (var i = 0; i < ec[1]; i++)
+      for (var b = 0; b < ec[2]; b++) interleaved.push(ecBlocks[b][i]);
+    return { data: interleaved, version: version };
+  }
+
+  // --- Matrix building ---
+  var SIZE_MAP = {}; for (var v=1;v<=10;v++) SIZE_MAP[v] = 4*v+17;
+
+  function makeMatrix(version) {
+    var size = SIZE_MAP[version];
+    var m = []; for (var i=0;i<size;i++) { m.push([]); for (var j=0;j<size;j++) m[i].push(null); }
+    return m;
+  }
+
+  function setFinder(m, r, c) {
+    var pat = [[1,1,1,1,1,1,1],[1,0,0,0,0,0,1],[1,0,1,1,1,0,1],[1,0,1,1,1,0,1],[1,0,1,1,1,0,1],[1,0,0,0,0,0,1],[1,1,1,1,1,1,1]];
+    for (var i=0;i<7;i++) for (var j=0;j<7;j++) if (r+i>=0&&r+i<m.length&&c+j>=0&&c+j<m.length) m[r+i][c+j] = pat[i][j];
+  }
+
+  function setAlignment(m, centers) {
+    var size = m.length;
+    for (var a=0;a<centers.length;a++) for (var b=0;b<centers.length;b++) {
+      var r=centers[a]-2, c=centers[b]-2;
+      if (m[r+2][c+2]!==null) continue;
+      var pat=[[1,1,1,1,1],[1,0,0,0,1],[1,0,1,0,1],[1,0,0,0,1],[1,1,1,1,1]];
+      for (var i=0;i<5;i++) for (var j=0;j<5;j++) m[r+i][c+j]=pat[i][j];
+    }
+  }
+
+  function placeBits(m, data) {
+    var size = m.length;
+    var bitIdx = 0, allBits = [];
+    for (var i=0;i<data.length;i++) for (var b=7;b>=0;b--) allBits.push((data[i]>>b)&1);
+    // Remainder bits
+    var rem = [0,7,7,7,7,7,0,0,0,0][Math.floor((size-17)/4)-1] || 0;
+    for (var i=0;i<rem;i++) allBits.push(0);
+
+    var col = size-1, up = true;
+    while (col > 0) {
+      if (col === 6) col--;
+      for (var row=0; row<size; row++) {
+        var r = up ? size-1-row : row;
+        for (var dc=0;dc<2;dc++) {
+          var c = col - dc;
+          if (m[r][c] === null) {
+            m[r][c] = allBits[bitIdx++] || 0;
+          }
+        }
+      }
+      col -= 2; up = !up;
+    }
+  }
+
+  function applyMask(m, mask) {
+    var size = m.length;
+    for (var r=0;r<size;r++) for (var c=0;c<size;c++) {
+      if (m[r][c] !== null) {
+        var apply = false;
+        if (mask===0) apply=(r+c)%2===0;
+        else if (mask===1) apply=r%2===0;
+        else if (mask===2) apply=c%3===0;
+        else if (mask===3) apply=(r+c)%3===0;
+        else if (mask===4) apply=(Math.floor(r/2)+Math.floor(c/3))%2===0;
+        else if (mask===5) apply=(r*c)%2+(r*c)%3===0;
+        else if (mask===6) apply=((r*c)%2+(r*c)%3)%2===0;
+        else if (mask===7) apply=((r+c)%2+(r*c)%3)%2===0;
+        if (apply) m[r][c] ^= 1;
+      }
+    }
+  }
+
+  function setFormat(m, mask) {
+    var size = m.length;
+    // Format string for ECC level M (10) and mask
+    var fmtData = [0b101010000010010,0b101000100100101,0b101111001111100,0b101101101001011,
+                   0b100010111111001,0b100000011001110,0b100111110010111,0b100101010100000];
+    var fmt = fmtData[mask];
+    var bits = []; for (var i=14;i>=0;i--) bits.push((fmt>>i)&1);
+    var pos = [[8,0],[8,1],[8,2],[8,3],[8,4],[8,5],[8,7],[8,8],[7,8],[5,8],[4,8],[3,8],[2,8],[1,8],[0,8]];
+    for (var i=0;i<15;i++) {
+      m[pos[i][0]][pos[i][1]] = bits[i];
+      m[size-1-pos[14-i][1]][pos[14-i][0]] = bits[i];
+    }
+    m[8][size-8] = 1;
+  }
+
+  function buildQR(text) {
+    var enc = encodeData(text);
+    var version = enc.version, size = SIZE_MAP[version];
+    var m = makeMatrix(version);
+
+    // Finder patterns + separators
+    setFinder(m, 0, 0); setFinder(m, 0, size-7); setFinder(m, size-7, 0);
+    // Separators
+    for (var i=0;i<8;i++) { [m[7][i],m[i][7],m[7][size-1-i],m[i][size-8],m[size-8][i],m[size-1-i][7]] = [0,0,0,0,0,0]; }
+
+    // Timing
+    for (var i=8;i<size-8;i++) { m[6][i]=m[i][6]=(i%2===0)?1:0; }
+
+    // Dark module
+    m[size-8][8] = 1;
+
+    // Alignment
+    if (ALIGN[version].length) setAlignment(m, ALIGN[version]);
+
+    // Reserve format
+    for (var i=0;i<9;i++) { if(m[8][i]===null)m[8][i]=0; if(m[i][8]===null)m[i][8]=0; }
+    for (var i=0;i<8;i++) { if(m[8][size-1-i]===null)m[8][size-1-i]=0; if(m[size-1-i][8]===null)m[size-1-i][8]=0; }
+
+    placeBits(m, enc.data);
+    applyMask(m, 2);
+    setFormat(m, 2);
+    return m;
+  }
+
+  return {
+    toCanvas: function(canvas, text, opts, cb) {
+      try {
+        var m = buildQR(text);
+        var size = m.length;
+        var scale = Math.floor((opts && opts.width ? opts.width : 128) / (size + 8));
+        if (scale < 1) scale = 1;
+        var margin = (opts && opts.margin !== undefined ? opts.margin : 2) * scale;
+        var px = size * scale + margin * 2;
+        canvas.width = canvas.height = px;
+        var ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,px,px);
+        ctx.fillStyle = '#000000';
+        for (var r=0;r<size;r++) for (var c=0;c<size;c++) if (m[r][c]) ctx.fillRect(margin+c*scale, margin+r*scale, scale, scale);
+        if (cb) cb(null);
+      } catch(e) { if (cb) cb(e); }
+    }
+  };
+})();
+</script>
 
 <script>
 // ─── CONFIG ─────────────────────────────────────────────────
