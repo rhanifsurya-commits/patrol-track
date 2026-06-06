@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>PatrolTrack</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #1a1a1a; }
+  .app { max-width: 480px; margin: 0 auto; background: #fff; min-height: 100vh; display: flex; flex-direction: column; }
+
+  /* NAV */
+  .nav { display: flex; align-items: center; padding: 14px 16px; border-bottom: 1px solid #eee; background: #fff; position: sticky; top: 0; z-index: 100; }
+  .nav-logo { font-size: 16px; font-weight: 700; color: #1a1a1a; display: flex; align-items: center; gap: 8px; }
+  .nav-logo-icon { width: 30px; height: 30px; background: #1a1a1a; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+  .nav-logo-icon svg { width: 18px; height: 18px; fill: none; stroke: #fff; stroke-width: 2; }
+  .nav-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .nav-role-badge { font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 600; }
+  .badge-superadmin { background: #1a1a1a; color: #fff; }
+  .badge-clientadmin { background: #dbeafe; color: #1e40af; }
+  .badge-manager { background: #f3e8ff; color: #6b21a8; }
+  .badge-guard { background: #dcfce7; color: #166534; }
+  .nav-switch-btn { font-size: 12px; padding: 4px 10px; border: 1px solid #ddd; border-radius: 8px; background: #fff; cursor: pointer; color: #555; }
+
+  /* ROLE PICKER */
+  .role-picker { display: none; padding: 12px 16px; background: #f9f9f9; border-bottom: 1px solid #eee; }
+  .role-picker.open { display: block; }
+  .role-picker-label { font-size: 12px; color: #888; margin-bottom: 8px; }
+  .role-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .role-option { padding: 10px 12px; border: 1px solid #e5e5e5; border-radius: 10px; background: #fff; cursor: pointer; font-size: 13px; font-weight: 500; color: #333; text-align: left; }
+  .role-option:hover { border-color: #1a1a1a; }
+  .role-option.active { border-color: #1a1a1a; background: #1a1a1a; color: #fff; }
+  .role-option small { display: block; font-size: 11px; font-weight: 400; margin-top: 2px; opacity: 0.7; }
+
+  /* TABS */
+  .tab-bar { display: flex; border-bottom: 1px solid #eee; background: #fff; overflow-x: auto; scrollbar-width: none; }
+  .tab-bar::-webkit-scrollbar { display: none; }
+  .tab { padding: 12px 16px; font-size: 13px; font-weight: 500; color: #888; cursor: pointer; white-space: nowrap; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab.active { color: #1a1a1a; border-bottom-color: #1a1a1a; }
+
+  /* CONTENT */
+  .content { padding: 16px; flex: 1; }
+
+  /* CARDS */
+  .card { background: #fff; border: 1px solid #eee; border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+  .card-title { font-size: 11px; font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 12px; }
+
+  /* STATS */
+  .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
+  .stat { background: #f9f9f9; border-radius: 12px; padding: 14px 12px; }
+  .stat-label { font-size: 11px; color: #888; margin-bottom: 4px; }
+  .stat-val { font-size: 26px; font-weight: 700; }
+
+  /* BUTTONS */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 16px; border-radius: 10px; border: 1px solid #e5e5e5; background: #fff; font-size: 14px; font-weight: 500; cursor: pointer; color: #1a1a1a; font-family: inherit; transition: all 0.15s; }
+  .btn:hover { background: #f5f5f5; }
+  .btn:active { transform: scale(0.97); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+  .btn-primary { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+  .btn-primary:hover { background: #333; }
+  .btn-danger { background: #fff0f0; color: #c0392b; border-color: #fcc; }
+  .btn-success { background: #f0fff4; color: #166534; border-color: #bbf7d0; }
+  .btn-full { width: 100%; }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+  /* FORM */
+  .form-group { margin-bottom: 14px; }
+  .form-group label { font-size: 13px; color: #666; display: block; margin-bottom: 5px; font-weight: 500; }
+  .form-group select, .form-group textarea, .form-group input { width: 100%; padding: 10px 12px; border: 1px solid #e5e5e5; border-radius: 10px; font-size: 14px; font-family: inherit; background: #fff; color: #1a1a1a; outline: none; }
+  .form-group select:focus, .form-group textarea:focus, .form-group input:focus { border-color: #1a1a1a; }
+  .form-group textarea { resize: vertical; min-height: 90px; }
+
+  /* TABLE */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; font-size: 11px; font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: 0.04em; padding: 8px 12px; border-bottom: 1px solid #eee; }
+  td { padding: 12px 12px; border-bottom: 1px solid #f5f5f5; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+
+  /* BADGES */
+  .badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 20px; }
+  .badge-ok { background: #dcfce7; color: #166534; }
+  .badge-issue { background: #fee2e2; color: #991b1b; }
+  .badge-warn { background: #fef9c3; color: #854d0e; }
+
+  /* EMPTY STATE */
+  .empty { text-align: center; padding: 48px 20px; color: #aaa; }
+  .empty-icon { font-size: 40px; margin-bottom: 8px; }
+  .empty p { font-size: 14px; }
+
+  /* SCANNER */
+  .scan-tap-area { text-align: center; padding: 40px 20px; border: 2px dashed #e0e0e0; border-radius: 16px; cursor: pointer; margin-bottom: 0; transition: all 0.15s; }
+  .scan-tap-area:hover { border-color: #1a1a1a; background: #f9f9f9; }
+  .scan-tap-area:active { transform: scale(0.98); }
+  .scan-tap-icon { font-size: 56px; margin-bottom: 10px; }
+  .scan-tap-title { font-size: 16px; font-weight: 600; color: #1a1a1a; margin-bottom: 4px; }
+  .scan-tap-sub { font-size: 13px; color: #888; }
+
+  .scanner-container { position: relative; width: 100%; border-radius: 16px; overflow: hidden; background: #000; aspect-ratio: 1; }
+  #qr-video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .scanner-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+  .scan-frame { width: 210px; height: 210px; position: relative; }
+  .scan-frame::before { content: ''; position: absolute; top: 0; left: 0; width: 36px; height: 36px; border-top: 3px solid #fff; border-left: 3px solid #fff; border-radius: 4px 0 0 0; }
+  .scan-frame::after { content: ''; position: absolute; top: 0; right: 0; width: 36px; height: 36px; border-top: 3px solid #fff; border-right: 3px solid #fff; border-radius: 0 4px 0 0; }
+  .scan-corner-bl { position: absolute; bottom: 0; left: 0; width: 36px; height: 36px; border-bottom: 3px solid #fff; border-left: 3px solid #fff; border-radius: 0 0 0 4px; }
+  .scan-corner-br { position: absolute; bottom: 0; right: 0; width: 36px; height: 36px; border-bottom: 3px solid #fff; border-right: 3px solid #fff; border-radius: 0 0 4px 0; }
+  .scan-line { position: absolute; left: 0; right: 0; height: 2px; background: rgba(255,255,255,0.8); animation: scanline 2s ease-in-out infinite; }
+  @keyframes scanline { 0%,100% { top: 8%; } 50% { top: 88%; } }
+  .scan-hint-text { position: absolute; bottom: 14px; left: 0; right: 0; text-align: center; color: rgba(255,255,255,0.85); font-size: 13px; font-weight: 500; }
+
+  /* STEPS */
+  .steps { display: flex; align-items: center; margin-bottom: 20px; }
+  .step { display: flex; flex-direction: column; align-items: center; flex: 1; }
+  .step-dot { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+  .step-dot-done { background: #dcfce7; color: #166534; }
+  .step-dot-active { background: #1a1a1a; color: #fff; }
+  .step-dot-idle { background: #f0f0f0; color: #aaa; }
+  .step-label { font-size: 11px; margin-top: 4px; font-weight: 500; color: #aaa; }
+  .step-label-active { color: #1a1a1a; }
+  .step-divider { flex: 1; height: 1px; background: #eee; margin: 0 4px; margin-bottom: 20px; }
+
+  /* CONFIRM CARD */
+  .confirm-checkpoint { background: #f9f9f9; border-radius: 14px; padding: 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 14px; }
+  .confirm-icon { width: 48px; height: 48px; background: #dcfce7; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+  .confirm-name { font-size: 18px; font-weight: 700; color: #1a1a1a; }
+  .confirm-meta { font-size: 13px; color: #666; margin-top: 2px; }
+  .confirm-time { font-size: 12px; color: #aaa; margin-top: 4px; }
+  .confirm-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  /* QR GRID */
+  .qr-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .qr-card { background: #fff; border: 1px solid #eee; border-radius: 14px; padding: 14px; text-align: center; }
+  .qr-canvas-wrap { display: flex; align-items: center; justify-content: center; margin-bottom: 8px; }
+  .qr-card-name { font-size: 13px; font-weight: 600; color: #1a1a1a; }
+  .qr-card-loc { font-size: 11px; color: #888; margin-top: 2px; margin-bottom: 10px; }
+
+  /* FILTER ROW */
+  .filter-row { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+  .filter-row select { flex: 1; min-width: 120px; padding: 8px 10px; border: 1px solid #e5e5e5; border-radius: 10px; font-size: 13px; font-family: inherit; background: #fff; color: #1a1a1a; outline: none; }
+
+  /* TOAST */
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); padding: 12px 20px; border-radius: 12px; font-size: 14px; font-weight: 600; z-index: 9999; display: none; white-space: nowrap; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
+  .toast-ok { background: #166534; color: #fff; }
+  .toast-err { background: #991b1b; color: #fff; }
+
+  /* INFO BOX */
+  .info-box { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 10px; padding: 12px 14px; font-size: 13px; color: #0c4a6e; margin-bottom: 14px; }
+
+  @media (prefers-color-scheme: dark) {
+    body { background: #0f0f0f; color: #f0f0f0; }
+    .app { background: #1a1a1a; }
+    .nav, .tab-bar { background: #1a1a1a; border-color: #2a2a2a; }
+    .nav-logo { color: #f0f0f0; }
+    .nav-logo-icon { background: #f0f0f0; }
+    .nav-logo-icon svg { stroke: #1a1a1a; }
+    .tab { color: #666; }
+    .tab.active { color: #f0f0f0; border-bottom-color: #f0f0f0; }
+    .card { background: #222; border-color: #2e2e2e; }
+    .stat { background: #2a2a2a; }
+    .stat-label { color: #666; }
+    .btn { background: #222; border-color: #333; color: #f0f0f0; }
+    .btn:hover { background: #2a2a2a; }
+    .btn-primary { background: #f0f0f0; color: #1a1a1a; border-color: #f0f0f0; }
+    .btn-primary:hover { background: #ddd; }
+    .form-group label { color: #888; }
+    .form-group select, .form-group textarea, .form-group input { background: #2a2a2a; border-color: #333; color: #f0f0f0; }
+    th { color: #666; border-color: #2e2e2e; }
+    td { border-color: #222; }
+    .scan-tap-area { border-color: #333; }
+    .scan-tap-area:hover { background: #222; border-color: #f0f0f0; }
+    .confirm-checkpoint { background: #222; }
+    .qr-card { background: #222; border-color: #2e2e2e; }
+    .role-picker { background: #222; border-color: #2e2e2e; }
+    .role-option { background: #2a2a2a; border-color: #333; color: #f0f0f0; }
+    .role-option.active { background: #f0f0f0; color: #1a1a1a; }
+    .filter-row select { background: #222; border-color: #333; color: #f0f0f0; }
+    .info-box { background: #0c2233; border-color: #1e4a6e; color: #7dd3fc; }
+    .nav-switch-btn { background: #222; border-color: #333; color: #aaa; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- NAV -->
+  <div class="nav">
+    <div class="nav-logo">
+      <div class="nav-logo-icon">
+        <svg viewBox="0 0 24 24"><path d="M12 2L4 6v6c0 5.25 3.5 10.15 8 11.35C16.5 22.15 20 17.25 20 12V6L12 2z"/></svg>
+      </div>
+      PatrolTrack
+    </div>
+    <div class="nav-right">
+      <span class="nav-role-badge badge-superadmin" id="role-badge">Super Admin</span>
+      <button class="nav-switch-btn" onclick="toggleRolePicker()">Switch ▾</button>
+    </div>
+  </div>
+
+  <!-- ROLE PICKER -->
+  <div class="role-picker" id="role-picker">
+    <div class="role-picker-label">View app as:</div>
+    <div class="role-options">
+      <button class="role-option active" onclick="switchRole('superadmin',this)">Super Admin<small>Full access</small></button>
+      <button class="role-option" onclick="switchRole('clientadmin',this)">Client Admin<small>Company view</small></button>
+      <button class="role-option" onclick="switchRole('manager',this)">Factory Manager<small>Read-only</small></button>
+      <button class="role-option" onclick="switchRole('guard',this)">Security Guard<small>Scan & report</small></button>
+    </div>
+  </div>
+
+  <!-- TAB BARS (one per role) -->
+  <div id="tabs-superadmin" class="tab-bar">
+    <div class="tab active" onclick="switchTab('dashboard',this)">Dashboard</div>
+    <div class="tab" onclick="switchTab('logs',this)">Patrol Logs</div>
+    <div class="tab" onclick="switchTab('qrcodes',this)">QR Codes</div>
+    <div class="tab" onclick="switchTab('settings',this)">Settings</div>
+  </div>
+  <div id="tabs-clientadmin" class="tab-bar" style="display:none">
+    <div class="tab active" onclick="switchTab('dashboard',this)">Dashboard</div>
+    <div class="tab" onclick="switchTab('logs',this)">Patrol Logs</div>
+  </div>
+  <div id="tabs-manager" class="tab-bar" style="display:none">
+    <div class="tab active" onclick="switchTab('logs',this)">Patrol Logs</div>
+  </div>
+  <div id="tabs-guard" class="tab-bar" style="display:none">
+    <div class="tab active" onclick="switchTab('scan',this)">Scan & Report</div>
+    <div class="tab" onclick="switchTab('mylog',this)">My Log</div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="content" id="main-content"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- QR libraries -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+<script>
+// ─── CONFIG ─────────────────────────────────────────────────
+const SHEET_ID = '1-hoHGVJf8HbqRSZ0dO5xziyLTaxWz9NKSW-GshXvEoU';
+const CLIENT_EMAIL = 'patrol-tracker-service@patrol-checker.iam.gserviceaccount.com';
+const PRIVATE_KEY = `-----BEGIN PRIVATE KEY-----
+MIIEvwIBADANBgkqhkiG9w0BAQEFAASCBKkwggSlAgEAAoIBAQDj57N2ZdyaWx7/
+4S1jgUTB0Si6ZP/8p64/8ZaJCi17xX+/TwQvGOENuNBN/HfkhFejxLUYmo+Reyye
+8TWauTf5/3V+8Y5dKN5zjZYnX8WZW8teDFmi86WXWZ6fb61+Ty/5hHi8TThcisTG
+XWp5DigQ3WOkj8F6yV0hl+/bkgMg/K2qjvdEjPnlie5e1MGJJ/kmi+bn0/E2mRL7
+CyuP065MsHjUVwcj2Rja8s8BG289LR3fdzYIdTy+lEb0I+XFKxWvSQ1q3rxJrjyQ
+B+LXjexhktZYSbtm6a7V+Qf7EH76EOwF/6AftWrXq+5jfMhtmj8ZgIn0sTVFUcp/
+coanJbtHAgMBAAECggEAZ60wfVSCYi/AruvLf6A/XKJfUkf/Eftf8BPhhM79+PfU
+EP4Lq7c4Lktca5XGHs07pzMlpR8u36I2nsmhNpU6yz40v754opWkeNG4tInDdOwG
+3G5m2pPXST5KREKEHNk+PFbQq+y/Do5MTOcTOCXCAUYNfb+t50MyXEVnpq3KQZcF
+D2eDS6XHukjmrZUGeBnBWA2U8Dkp42R+8qvkCdY89MeZcLjMsTkgvEmqJvfRsjQ6
+qCbO+IEd1PqCjmSx1cMA7Dry2MJ1WolP+4nDdLs3shlmCyyL24/lQdnDk778jdzT
+TVIpdp4S9pA7lUa1kuSLT5YpfEKNTK8ByjXdKNfYqQKBgQD9ZPbkOodr21gJtK5Y
+vKrz733RKkxqQ0wMZhnmwncX1YxPzE6XZrY32LS04cBsH/mKsbYak8Fl7l5Xsfp2
+A4PmFgOUuzaVwgiTVJjKJIis0hsLdZ1waBs3IJ7DB3QGNGYF7gfyk62aa9AdekTi
+vNz1wf9KBSf8VypIBessTiJGSQKBgQDmP6N2grP5OiryZ04VdrE5SVqcG19q6yhJ
+8FhZt6xtxdaHu0LpqU+iHJ8wMG9K5hezCDwnYDa+tsG4wmgVUB70xOW0AXSe48+p
+rhGb0qBvxI8MZJJyWOnPK6oa3R4maOBUBhYCDzAeltv3DrJkbNSSaMpIjrL0C6+K
+Zf0Dc+K1DwKBgQCG8EFaAKElGsWjRYii0LXo+VxzCqdu3y+cWrLoZB6vnpT92brw
+fU4EJ27z9FRYQB7PcRucw5p2AZ5T7P+H4Q9Yc9isV5YV4iJW8vH6k8IE5k5op9WT
+ip0TmldxXIK42yaJedzZnTMRzOAjEn2kkRbJ+OlOLbjBdFmbySsXiPRPoQKBgQDZ
+nWosl0nsk1qF8rdtN9o2r6rRAloDnrBceam3Wg7BTYv+izGp0FkweebGz/BQFPpv
+PqhD+v6i7+5WZn+jLS+k3ffQUtPbXKsnzxpbcQ4rtNYSu3diVcDeCoHik/xsBxGG
+uJ3SYnJzZtgNQDnBCs86dYpCW4StfeHyZ4Rj4AJ0ZwKBgQDOf7UX6Jc+AQCkEIwl
+HsdNN+ankWrRJVY+ZUzmpGny97NJk1SL2exaAuFMnDpZKEpN+pZVJRPzi5zX9YQx
+92//FPZFGiBiwv8P9uohgT/ZSKRFDC7PjhEA2ecWjHG4Qb0lP+m+gSm/3gxSRKIJ
+ePr1IiRknorE6Ol7LghD73R1RA==
+-----END PRIVATE KEY-----`;
+
+// ─── DATA ────────────────────────────────────────────────────
+const checkpoints = [
+  { id: 'CP001', name: 'Main Gate', location: 'Entrance A', company: 'PT Example' },
+  { id: 'CP002', name: 'Warehouse A', location: 'Building 1', company: 'PT Example' },
+  { id: 'CP003', name: 'Server Room', location: 'Block C', company: 'PT Example' },
+  { id: 'CP004', name: 'Parking Area', location: 'South Wing', company: 'PT Example' },
+];
+const guards = [
+  { id: 'G001', name: 'Budi Santoso', company: 'PT Example' },
+  { id: 'G002', name: 'Andi Pratama', company: 'PT Example' },
+  { id: 'G003', name: 'Sari Dewi', company: 'PT Example' },
+  { id: 'G004', name: 'Hendra Wijaya', company: 'PT Example' },
+];
+
+// ─── STATE ───────────────────────────────────────────────────
+let currentRole = 'superadmin';
+let currentTab = 'dashboard';
+let currentGuard = guards[0];
+let scanState = 'idle'; // idle | scanning | confirming | reporting
+let scannedCheckpoint = null;
+let patrolLogs = [];
+let accessToken = null;
+let tokenExpiry = 0;
+let videoStream = null;
+let scanInterval = null;
+
+// ─── AUTH ────────────────────────────────────────────────────
+async function getAccessToken() {
+  if (accessToken && Date.now() < tokenExpiry) return accessToken;
+  try {
+    const header = { alg: 'RS256', typ: 'JWT' };
+    const now = Math.floor(Date.now() / 1000);
+    const claim = { iss: CLIENT_EMAIL, scope: 'https://www.googleapis.com/auth/spreadsheets', aud: 'https://oauth2.googleapis.com/token', exp: now + 3600, iat: now };
+    const b64 = s => btoa(unescape(encodeURIComponent(JSON.stringify(s)))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+    const unsigned = b64(header) + '.' + b64(claim);
+    const pemKey = PRIVATE_KEY.replace(/-----BEGIN PRIVATE KEY-----/,'').replace(/-----END PRIVATE KEY-----/,'').replace(/\s/g,'');
+    const binaryDer = Uint8Array.from(atob(pemKey), c => c.charCodeAt(0));
+    const key = await crypto.subtle.importKey('pkcs8', binaryDer.buffer, { name:'RSASSA-PKCS1-v1_5', hash:'SHA-256' }, false, ['sign']);
+    const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(unsigned));
+    const sigB64 = btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+    const jwt = unsigned + '.' + sigB64;
+    const res = await fetch('https://oauth2.googleapis.com/token', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:`grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}` });
+    const data = await res.json();
+    if (data.access_token) { accessToken = data.access_token; tokenExpiry = Date.now() + 3500000; return accessToken; }
+  } catch(e) { console.error('Auth error:', e); }
+  return null;
+}
+
+async function ensureHeaders() {
+  try {
+    const token = await getAccessToken(); if (!token) return;
+    const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Sheet1!A1:H1`, { headers: { Authorization: `Bearer ${token}` } });
+    const d = await r.json();
+    if (d.values && d.values.length) return;
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Sheet1!A1:H1?valueInputOption=RAW`, { method:'PUT', headers:{ Authorization:`Bearer ${token}`, 'Content-Type':'application/json' }, body: JSON.stringify({ values:[['Timestamp','Guard Name','Guard ID','Checkpoint','Location','Company','Status','Notes/Suggestions']] }) });
+  } catch(e) {}
+}
+
+async function appendRow(row) {
+  const token = await getAccessToken(); if (!token) throw new Error('No token');
+  const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Sheet1!A:H:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, { method:'POST', headers:{ Authorization:`Bearer ${token}`, 'Content-Type':'application/json' }, body: JSON.stringify({ values:[row] }) });
+  if (!res.ok) throw new Error('Write failed');
+}
+
+async function fetchRows() {
+  const token = await getAccessToken(); if (!token) return [];
+  const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Sheet1!A:H`, { headers:{ Authorization:`Bearer ${token}` } });
+  const d = await res.json();
+  if (!d.values || d.values.length < 2) return [];
+  return d.values.slice(1).map(r => ({ timestamp:r[0]||'', guardName:r[1]||'', guardId:r[2]||'', checkpoint:r[3]||'', location:r[4]||'', company:r[5]||'', status:r[6]||'', notes:r[7]||'' }));
+}
+
+// ─── UI HELPERS ──────────────────────────────────────────────
+function showToast(msg, type='ok') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = `toast toast-${type}`; t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', 3500);
+}
+
+function fmtTime(ts) {
+  try {
+    const d = new Date(ts); if (isNaN(d)) return ts;
+    return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'}) + ' ' + d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  } catch { return ts; }
+}
+
+function statusBadge(s) {
+  if (s === 'All Clear') return `<span class="badge badge-ok">✓ All Clear</span>`;
+  if (s === 'Issue Found') return `<span class="badge badge-issue">⚠ Issue</span>`;
+  return `<span class="badge badge-warn">! Attention</span>`;
+}
+
+function logTable(logs) {
+  if (!logs.length) return `<div class="empty"><div class="empty-icon">📋</div><p>No patrol logs yet</p></div>`;
+  return `<div class="table-wrap"><table>
+    <thead><tr><th>Time</th><th>Guard</th><th>Checkpoint</th><th>Status</th><th>Notes</th></tr></thead>
+    <tbody>${logs.map(l=>`<tr>
+      <td style="white-space:nowrap;color:#888;font-size:12px">${fmtTime(l.timestamp)}</td>
+      <td style="font-weight:500">${l.guardName}</td>
+      <td><strong>${l.checkpoint}</strong><br><span style="font-size:11px;color:#888">${l.location}</span></td>
+      <td>${statusBadge(l.status)}</td>
+      <td style="font-size:12px;color:#888;max-width:140px">${l.notes||'—'}</td>
+    </tr>`).join('')}</tbody>
+  </table></div>`;
+}
+
+function steps(active) {
+  // active: 1=scan, 2=confirm, 3=report
+  const dot = (n, label) => {
+    const state = n < active ? 'done' : n === active ? 'active' : 'idle';
+    const cls = `step-dot step-dot-${state}`;
+    const icon = state === 'done' ? '✓' : n;
+    const lCls = state === 'active' ? 'step-label step-label-active' : 'step-label';
+    return `<div class="step"><div class="${cls}">${icon}</div><div class="${lCls}">${label}</div></div>`;
+  };
+  return `<div class="steps">${dot(1,'Scan')}<div class="step-divider"></div>${dot(2,'Confirm')}<div class="step-divider"></div>${dot(3,'Report')}</div>`;
+}
+
+// ─── ROLE / TAB SWITCHING ────────────────────────────────────
+function toggleRolePicker() {
+  const p = document.getElementById('role-picker');
+  p.classList.toggle('open');
+}
+
+function switchRole(role, btn) {
+  stopCamera(); scanState = 'idle'; scannedCheckpoint = null;
+  currentRole = role;
+  document.querySelectorAll('.role-option').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const labels = { superadmin:'Super Admin', clientadmin:'Client Admin', manager:'Factory Manager', guard:'Security Guard' };
+  const badgeCls = { superadmin:'badge-superadmin', clientadmin:'badge-clientadmin', manager:'badge-manager', guard:'badge-guard' };
+  const rb = document.getElementById('role-badge');
+  rb.textContent = labels[role]; rb.className = `nav-role-badge ${badgeCls[role]}`;
+  document.getElementById('role-picker').classList.remove('open');
+  ['superadmin','clientadmin','manager','guard'].forEach(r => { document.getElementById(`tabs-${r}`).style.display = r===role?'flex':'none'; });
+  const defaultTabs = { superadmin:'dashboard', clientadmin:'dashboard', manager:'logs', guard:'scan' };
+  currentTab = defaultTabs[role];
+  document.querySelectorAll(`#tabs-${role} .tab`).forEach((t,i) => t.classList.toggle('active', i===0));
+  renderContent();
+}
+
+function switchTab(tab, el) {
+  stopCamera(); scanState = 'idle'; scannedCheckpoint = null;
+  currentTab = tab;
+  el.closest('.tab-bar').querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderContent();
+}
+
+// ─── RENDER ──────────────────────────────────────────────────
+function renderContent() {
+  const c = document.getElementById('main-content');
+  const renders = {
+    dashboard: renderDashboard,
+    logs: renderLogs,
+    qrcodes: renderQRCodes,
+    settings: renderSettings,
+    scan: renderGuardScan,
+    mylog: renderMyLog,
+  };
+  c.innerHTML = (renders[currentTab] || renderDashboard)();
+  if (currentTab === 'qrcodes') setTimeout(drawQRCodes, 100);
+  if (currentTab === 'scan' && scanState === 'scanning') setTimeout(startCamera, 150);
+  if (['dashboard','logs','mylog'].includes(currentTab)) loadLogs();
+}
+
+function renderDashboard() {
+  const today = new Date().toISOString().slice(0,10);
+  const todayLogs = patrolLogs.filter(l => l.timestamp.startsWith(today));
+  const issues = patrolLogs.filter(l=>l.status==='Issue Found').length;
+  const clear = patrolLogs.filter(l=>l.status==='All Clear').length;
+  return `
+    <div class="stat-grid">
+      <div class="stat"><div class="stat-label">Today</div><div class="stat-val" id="s-today">${todayLogs.length}</div></div>
+      <div class="stat"><div class="stat-label">Clear</div><div class="stat-val" style="color:#166534" id="s-clear">${clear}</div></div>
+      <div class="stat"><div class="stat-label">Issues</div><div class="stat-val" style="color:#991b1b" id="s-issues">${issues}</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Live patrol log
+        <button class="btn btn-sm" style="float:right;margin-top:-2px" onclick="loadLogs()">↻ Refresh</button>
+      </div>
+      <div id="live-table">${logTable(patrolLogs.slice(-8).reverse())}</div>
+    </div>`;
+}
+
+function renderLogs() {
+  return `
+    <div class="filter-row">
+      <select id="f-status" onchange="filterLogs()"><option value="">All statuses</option><option>All Clear</option><option>Issue Found</option><option>Needs Attention</option></select>
+      <select id="f-cp" onchange="filterLogs()"><option value="">All checkpoints</option>${checkpoints.map(c=>`<option>${c.name}</option>`).join('')}</select>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <button class="btn btn-sm" onclick="loadLogs()">↻ Refresh</button>
+      <button class="btn btn-sm" onclick="exportCSV()">⬇ Export CSV</button>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div id="logs-table">${logTable([...patrolLogs].reverse())}</div>
+    </div>`;
+}
+
+function renderMyLog() {
+  const mine = patrolLogs.filter(l=>l.guardId===currentGuard.id);
+  return `
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="padding:14px 16px;font-size:14px;font-weight:600;border-bottom:1px solid #f0f0f0">My log — ${currentGuard.name}</div>
+      ${logTable([...mine].reverse())}
+    </div>`;
+}
+
+function renderGuardScan() {
+  const guardSel = guards.map(g=>`<option value="${g.id}" ${g.id===currentGuard.id?'selected':''}>${g.name}</option>`).join('');
+  let body = '';
+
+  if (scanState === 'idle') {
+    body = `
+      ${steps(1)}
+      <div class="scan-tap-area" onclick="startScanning()">
+        <div class="scan-tap-icon">📷</div>
+        <div class="scan-tap-title">Tap to open camera</div>
+        <div class="scan-tap-sub">Point at a checkpoint QR code to scan</div>
+      </div>`;
+  } else if (scanState === 'scanning') {
+    body = `
+      ${steps(1)}
+      <div class="scanner-container" style="margin-bottom:14px">
+        <video id="qr-video" autoplay playsinline muted></video>
+        <canvas id="qr-canvas" style="display:none"></canvas>
+        <div class="scanner-overlay">
+          <div class="scan-frame">
+            <div class="scan-corner-bl"></div>
+            <div class="scan-corner-br"></div>
+            <div class="scan-line"></div>
+          </div>
+        </div>
+        <div class="scan-hint-text">Align QR code in the frame</div>
+      </div>
+      <button class="btn btn-danger btn-full" onclick="cancelScan()">✕ Cancel</button>`;
+  } else if (scanState === 'confirming') {
+    const cp = scannedCheckpoint;
+    body = `
+      ${steps(2)}
+      <div class="confirm-checkpoint">
+        <div class="confirm-icon">📍</div>
+        <div>
+          <div class="confirm-name">${cp.name}</div>
+          <div class="confirm-meta">📦 ${cp.location} · ${cp.company}</div>
+          <div class="confirm-time">🕐 ${new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</div>
+        </div>
+      </div>
+      <div class="confirm-actions">
+        <button class="btn btn-danger" onclick="cancelScan()">✕ Wrong place</button>
+        <button class="btn btn-success" onclick="confirmCheckpoint()">✓ Confirm</button>
+      </div>`;
+  } else if (scanState === 'reporting') {
+    const cp = scannedCheckpoint;
+    body = `
+      ${steps(3)}
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#f0fff4;border-radius:10px;margin-bottom:16px">
+        <span style="font-size:18px">✅</span>
+        <div>
+          <div style="font-size:14px;font-weight:600">${cp.name}</div>
+          <div style="font-size:12px;color:#888">${cp.location}</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Condition status</label>
+        <select id="status-sel">
+          <option value="All Clear">✓ All Clear</option>
+          <option value="Issue Found">⚠ Issue Found</option>
+          <option value="Needs Attention">! Needs Attention</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Notes / Suggestions <span style="font-weight:400;color:#aaa">(optional)</span></label>
+        <textarea id="notes-txt" placeholder="e.g. The door is locked but it's not supposed to be locked..."></textarea>
+      </div>
+      <button class="btn btn-primary btn-full" id="submit-btn" onclick="submitReport()">Submit Report →</button>
+      <button class="btn btn-full" style="margin-top:8px" onclick="cancelScan()">← Back</button>`;
+  }
+
+  return `
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-title">Logged in as</div>
+      <select onchange="currentGuard=guards.find(g=>g.id===this.value)">${guardSel}</select>
+    </div>
+    <div class="card">${body}</div>`;
+}
+
+function renderQRCodes() {
+  return `
+    <div class="info-box">ℹ️ Print these QR codes and place them at each checkpoint. Guards scan them with their phone camera.</div>
+    <div class="qr-grid">
+      ${checkpoints.map(cp=>`
+        <div class="qr-card">
+          <div class="qr-canvas-wrap"><canvas id="qr-${cp.id}"></canvas></div>
+          <div class="qr-card-name">${cp.name}</div>
+          <div class="qr-card-loc">📍 ${cp.location}</div>
+          <button class="btn btn-sm btn-full" onclick="downloadQR('${cp.id}','${cp.name}')">⬇ Download</button>
+        </div>`).join('')}
+    </div>`;
+}
+
+function renderSettings() {
+  return `
+    <div class="card">
+      <div class="card-title">Google Sheets</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span class="badge badge-ok">● Connected</span>
+        <span style="font-size:13px;color:#888">PT Example — Client Test</span>
+      </div>
+      <div style="font-size:11px;color:#aaa;font-family:monospace;word-break:break-all;background:#f5f5f5;padding:8px;border-radius:8px">${SHEET_ID}</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Guards — PT Example</div>
+      <table>
+        <thead><tr><th>Name</th><th>ID</th></tr></thead>
+        <tbody>${guards.map(g=>`<tr><td style="font-weight:500">${g.name}</td><td style="font-family:monospace;font-size:12px;color:#888">${g.id}</td></tr>`).join('')}</tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-title">Checkpoints — PT Example</div>
+      <table>
+        <thead><tr><th>Name</th><th>Location</th></tr></thead>
+        <tbody>${checkpoints.map(cp=>`<tr><td style="font-weight:500">${cp.name}</td><td style="color:#888">${cp.location}</td></tr>`).join('')}</tbody>
+      </table>
+    </div>`;
+}
+
+// ─── SCANNING ────────────────────────────────────────────────
+function startScanning() { scanState = 'scanning'; renderContent(); setTimeout(startCamera, 150); }
+function cancelScan() { stopCamera(); scanState = 'idle'; scannedCheckpoint = null; renderContent(); }
+function confirmCheckpoint() { scanState = 'reporting'; renderContent(); }
+
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+    videoStream = stream;
+    const video = document.getElementById('qr-video');
+    if (!video) { stopCamera(); return; }
+    video.srcObject = stream;
+    video.play();
+    video.addEventListener('loadedmetadata', () => beginDetection(video));
+  } catch(e) {
+    showToast('Camera access denied. Please allow camera.', 'err');
+    scanState = 'idle'; renderContent();
+  }
+}
+
+function beginDetection(video) {
+  const canvas = document.getElementById('qr-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  scanInterval = setInterval(() => {
+    if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+    if (code) { stopCamera(); handleQR(code.data); }
+  }, 250);
+}
+
+function stopCamera() {
+  if (scanInterval) { clearInterval(scanInterval); scanInterval = null; }
+  if (videoStream) { videoStream.getTracks().forEach(t => t.stop()); videoStream = null; }
+}
+
+function handleQR(data) {
+  let cp = null;
+  try { const p = JSON.parse(data); cp = checkpoints.find(c => c.id === p.id); } catch {}
+  if (!cp) cp = checkpoints.find(c => c.id === data || c.name === data);
+  if (!cp) { showToast('Unknown QR code — not a valid checkpoint', 'err'); scanState = 'idle'; renderContent(); return; }
+  scannedCheckpoint = cp; scanState = 'confirming'; renderContent();
+}
+
+// ─── SUBMIT ──────────────────────────────────────────────────
+async function submitReport() {
+  const status = document.getElementById('status-sel').value;
+  const notes = document.getElementById('notes-txt').value;
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true; btn.textContent = 'Saving...';
+  const now = new Date();
+  const row = [now.toISOString(), currentGuard.name, currentGuard.id, scannedCheckpoint.name, scannedCheckpoint.location, scannedCheckpoint.company, status, notes];
+  try {
+    await ensureHeaders();
+    await appendRow(row);
+    patrolLogs.push({ timestamp: now.toISOString(), guardName: currentGuard.name, guardId: currentGuard.id, checkpoint: scannedCheckpoint.name, location: scannedCheckpoint.location, company: scannedCheckpoint.company, status, notes });
+    showToast('✓ Report saved to Google Sheets!', 'ok');
+    scanState = 'idle'; scannedCheckpoint = null; renderContent();
+  } catch(e) {
+    showToast('Failed to save. Check connection.', 'err');
+    btn.disabled = false; btn.textContent = 'Submit Report →';
+  }
+}
+
+// ─── LOAD LOGS ───────────────────────────────────────────────
+async function loadLogs() {
+  try {
+    patrolLogs = await fetchRows();
+    const today = new Date().toISOString().slice(0,10);
+    const todayLogs = patrolLogs.filter(l=>l.timestamp.startsWith(today));
+    const issues = patrolLogs.filter(l=>l.status==='Issue Found').length;
+    const clear = patrolLogs.filter(l=>l.status==='All Clear').length;
+    if (document.getElementById('s-today')) document.getElementById('s-today').textContent = todayLogs.length;
+    if (document.getElementById('s-clear')) document.getElementById('s-clear').textContent = clear;
+    if (document.getElementById('s-issues')) document.getElementById('s-issues').textContent = issues;
+    if (document.getElementById('live-table')) document.getElementById('live-table').innerHTML = logTable(patrolLogs.slice(-8).reverse());
+    if (document.getElementById('logs-table')) document.getElementById('logs-table').innerHTML = logTable([...patrolLogs].reverse());
+  } catch(e) { console.error(e); }
+}
+
+// ─── FILTER / EXPORT ─────────────────────────────────────────
+function filterLogs() {
+  const s = document.getElementById('f-status').value;
+  const cp = document.getElementById('f-cp').value;
+  let f = patrolLogs;
+  if (s) f = f.filter(l=>l.status===s);
+  if (cp) f = f.filter(l=>l.checkpoint===cp);
+  document.getElementById('logs-table').innerHTML = logTable([...f].reverse());
+}
+
+function exportCSV() {
+  const hdrs = ['Timestamp','Guard Name','Guard ID','Checkpoint','Location','Company','Status','Notes'];
+  const rows = patrolLogs.map(l=>[l.timestamp,l.guardName,l.guardId,l.checkpoint,l.location,l.company,l.status,l.notes]);
+  const csv = [hdrs,...rows].map(r=>r.map(v=>`"${(v||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download = `patrol-log-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+// ─── QR CODES ────────────────────────────────────────────────
+function drawQRCodes() {
+  if (typeof QRCode === 'undefined') { setTimeout(drawQRCodes, 300); return; }
+  checkpoints.forEach(cp => {
+    const canvas = document.getElementById(`qr-${cp.id}`);
+    if (!canvas) return;
+    QRCode.toCanvas(canvas, JSON.stringify({ id: cp.id, name: cp.name, location: cp.location }), { width: 130, margin: 1 }, () => {});
+  });
+}
+
+function downloadQR(id, name) {
+  const canvas = document.getElementById(`qr-${id}`);
+  if (!canvas) return;
+  const a = document.createElement('a');
+  a.href = canvas.toDataURL('image/png');
+  a.download = `QR-${name.replace(/\s+/g,'-')}.png`;
+  a.click();
+}
+
+// ─── INIT ────────────────────────────────────────────────────
+ensureHeaders();
+renderContent();
+setTimeout(loadLogs, 800);
+</script>
+</body>
+</html>
